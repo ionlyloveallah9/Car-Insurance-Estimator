@@ -1,0 +1,563 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Car Insurance Estimator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #a1c4fd, #c2e9fb);
+            color: #1a1a1a;
+            font-family: 'Montserrat', sans-serif;
+            padding: 20px;
+            animation: glowBackground 5s ease-in-out infinite;
+            overflow-x: hidden;
+        }
+        @keyframes glowBackground {
+            0% { background: linear-gradient(135deg, #a1c4fd, #c2e9fb); }
+            50% { background: linear-gradient(135deg, #8bb3ff, #b4e2ff); }
+            100% { background: linear-gradient(135deg, #a1c4fd, #c2e9fb); }
+        }
+        .card {
+            background: #ffffff;
+            border: 2px solid #00cc66;
+            border-radius: 20px;
+            box-shadow: 0 0 20px rgba(0, 204, 102, 0.5);
+            max-width: 900px;
+            margin: 0 auto;
+            animation: slideIn 0.6s ease-out;
+            transition: box-shadow 0.3s;
+        }
+        .card:hover {
+            box-shadow: 0 0 30px rgba(0, 204, 102, 0.7);
+        }
+        .form-label {
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 8px;
+        }
+        .form-control, .form-select {
+            border: 2px solid #00cc66;
+            border-radius: 12px;
+            padding: 12px;
+            font-size: 1rem;
+            transition: border-color 0.3s, box-shadow 0.3s, transform 0.2s;
+            box-shadow: 0 0 10px rgba(0, 204, 102, 0.3);
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: #00994d;
+            box-shadow: 0 0 15px rgba(0, 204, 102, 0.6);
+            transform: scale(1.02);
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #00cc66, #00994d);
+            border: none;
+            border-radius: 12px;
+            padding: 12px;
+            font-weight: 600;
+            color: #ffffff;
+            box-shadow: 0 0 15px rgba(0, 204, 102, 0.5);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .btn-primary:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 25px rgba(0, 204, 102, 0.8);
+        }
+        .btn-secondary, .btn-info {
+            border-radius: 12px;
+            padding: 12px;
+            box-shadow: 0 0 10px rgba(0, 204, 102, 0.3);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .btn-secondary:hover, .btn-info:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 15px rgba(0, 204, 102, 0.5);
+        }
+        .form-range::-webkit-slider-thumb {
+            background: #00cc66;
+            box-shadow: 0 0 10px rgba(0, 204, 102, 0.5);
+            cursor: pointer;
+        }
+        .chart-container {
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 0 15px rgba(0, 204, 102, 0.3);
+            margin-top: 20px;
+            animation: slideIn 0.8s ease-out;
+        }
+        .alert-info {
+            background: #e6f7fa;
+            border: 2px solid #00cc66;
+            color: #1a1a1a;
+            border-radius: 12px;
+            font-weight: 500;
+            box-shadow: 0 0 10px rgba(0, 204, 102, 0.3);
+        }
+        .modal-content {
+            background: #ffffff;
+            border: 2px solid #00cc66;
+            border-radius: 15px;
+            box-shadow: 0 0 20px rgba(0, 204, 102, 0.5);
+        }
+        .modal-header, .modal-body {
+            color: #1a1a1a;
+        }
+        .fa-info-circle {
+            color: #00cc66;
+            transition: transform 0.2s;
+        }
+        .fa-info-circle:hover {
+            transform: scale(1.2);
+        }
+        .text-muted {
+            color: #4a4a4a !important;
+        }
+        a {
+            color: #00cc66;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        a:hover {
+            color: #00994d;
+        }
+        .progress {
+            height: 10px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            background: #e6f7fa;
+            box-shadow: 0 0 10px rgba(0, 204, 102, 0.3);
+        }
+        .progress-bar {
+            background: linear-gradient(135deg, #00cc66, #00994d);
+            animation: pulseProgress 2s infinite;
+        }
+        @keyframes pulseProgress {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+        .loading-spinner {
+            display: none;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #00cc66;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 10px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card shadow">
+            <div class="card-body">
+                <h1 class="card-title text-center mb-4"><i class="fas fa-car me-2"></i>Car Insurance Estimator</h1>
+                <p class="text-muted text-center">Estimate your 2025 premiums with glowing charts and save big!</p>
+                <div class="progress">
+                    <div class="progress-bar" id="formProgress" style="width: 0%;"></div>
+                </div>
+                
+                <form id="estimatorForm" class="needs-validation" novalidate>
+                    <div class="mb-3">
+                        <label for="state" class="form-label">State <i class="fas fa-info-circle" data-bs-toggle="tooltip" title="Premiums vary by state due to regulations and risk factors."></i></label>
+                        <select id="state" class="form-select" required>
+                            <option value="">Select your state</option>
+                            <option value="2059">Alabama</option>
+                            <option value="2479">Alaska</option>
+                            <option value="2780">Arizona</option>
+                            <option value="2421">Arkansas</option>
+                            <option value="3102">California</option>
+                            <option value="3230">Colorado</option>
+                            <option value="2704">Connecticut</option>
+                            <option value="2931">Delaware</option>
+                            <option value="2802">District of Columbia</option>
+                            <option value="3874">Florida</option>
+                            <option value="2867">Georgia</option>
+                            <option value="1650">Hawaii</option>
+                            <option value="1443">Idaho</option>
+                            <option value="2488">Illinois</option>
+                            <option value="1704">Indiana</option>
+                            <option value="1916">Iowa</option>
+                            <option value="2497">Kansas</option>
+                            <option value="2661">Kentucky</option>
+                            <option value="3953">Louisiana</option>
+                            <option value="1631">Maine</option>
+                            <option value="2946">Maryland</option>
+                            <option value="2095">Massachusetts</option>
+                            <option value="3236">Michigan</option>
+                            <option value="2568">Minnesota</option>
+                            <option value="2320">Mississippi</option>
+                            <option value="2496">Missouri</option>
+                            <option value="2356">Montana</option>
+                            <option value="2357">Nebraska</option>
+                            <option value="3626">Nevada</option>
+                            <option value="1716">New Hampshire</option>
+                            <option value="3027">New Jersey</option>
+                            <option value="2126">New Mexico</option>
+                            <option value="4031">New York</option>
+                            <option value="1955">North Carolina</option>
+                            <option value="1799">North Dakota</option>
+                            <option value="1823">Ohio</option>
+                            <option value="2796">Oklahoma</option>
+                            <option value="2129">Oregon</option>
+                            <option value="2386">Pennsylvania</option>
+                            <option value="2960">Rhode Island</option>
+                            <option value="1955">South Carolina</option>
+                            <option value="2287">South Dakota</option>
+                            <option value="1976">Tennessee</option>
+                            <option value="2600">Texas</option>
+                            <option value="2146">Utah</option>
+                            <option value="1491">Vermont</option>
+                            <option value="2143">Virginia</option>
+                            <option value="1890">Washington</option>
+                            <option value="2163">West Virginia</option>
+                            <option value="1924">Wisconsin</option>
+                            <option value="1760">Wyoming</option>
+                        </select>
+                        <div class="invalid-feedback">Please select a state.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="age" class="form-label">Age <i class="fas fa-info-circle" data-bs-toggle="tooltip" title="Younger drivers (<25) pay up to 80% more."></i></label>
+                        <input type="range" id="age" class="form-range" min="16" max="100" value="30" required>
+                        <span id="ageValue">30</span>
+                        <div class="invalid-feedback">Age must be between 16 and 100.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="gender" class="form-label">Gender <i class="fas fa-info-circle" data-bs-toggle="tooltip" title="Males may pay 10% more in some states."></i></label>
+                        <select id="gender" class="form-select" required>
+                            <option value="1.0">Female</option>
+                            <option value="1.1">Male</option>
+                            <option value="1.0">Other/Prefer not to say</option>
+                        </select>
+                        <div class="invalid-feedback">Please select a gender.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="drivingRecord" class="form-label">Driving Record <i class="fas fa-info-circle" data-bs-toggle="tooltip" title="Accidents increase rates by up to 50%."></i></label>
+                        <select id="drivingRecord" class="form-select" required>
+                            <option value="1.0">Clean</option>
+                            <option value="1.2">Minor tickets</option>
+                            <option value="1.5">Accidents/major</option>
+                        </select>
+                        <div class="invalid-feedback">Please select a driving record.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="mileage" class="form-label">Annual Mileage <i class="fas fa-info-circle" data-bs-toggle="tooltip" title="Low mileage (<10k) can save 10-20%."></i></label>
+                        <input type="range" id="mileage" class="form-range" min="0" max="30000" value="12000" step="1000" required>
+                        <span id="mileageValue">12,000 miles</span>
+                        <div class="invalid-feedback">Please select mileage.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="vehicleType" class="form-label">Vehicle Type <i class="fas fa-info-circle" data-bs-toggle="tooltip" title="Luxury cars cost 30% more to insure."></i></label>
+                        <select id="vehicleType" class="form-select" required>
+                            <option value="0.8">Economy/Safe</option>
+                            <option value="1.0">Average</option>
+                            <option value="1.3">Luxury/Sports</option>
+                        </select>
+                        <div class="invalid-feedback">Please select vehicle type.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="creditScore" class="form-label">Credit Score <i class="fas fa-info-circle" data-bs-toggle="tooltip" title="Poor credit can double rates."></i></label>
+                        <select id="creditScore" class="form-select" required>
+                            <option value="1.5">Poor (Below 600)</option>
+                            <option value="1.2">Fair (600-699)</option>
+                            <option value="1.0">Good (700-749)</option>
+                            <option value="0.9">Excellent (750+)</option>
+                        </select>
+                        <div class="invalid-feedback">Please select credit score range.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="maritalStatus" class="form-label">Marital Status <i class="fas fa-info-circle" data-bs-toggle="tooltip" title="Married drivers save 5-10%."></i></label>
+                        <select id="maritalStatus" class="form-select" required>
+                            <option value="1.0">Single</option>
+                            <option value="0.95">Married</option>
+                        </select>
+                        <div class="invalid-feedback">Please select marital status.</div>
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button type="button" class="btn btn-primary" onclick="calculatePremium()"><i class="fas fa-calculator me-2"></i>Estimate Premium</button>
+                        <button type="button" class="btn btn-info" onclick="saveEstimate()"><i class="fas fa-save me-2"></i>Save Estimate</button>
+                        <button type="button" class="btn btn-info" onclick="loadSaved()"><i class="fas fa-folder-open me-2"></i>Load Saved</button>
+                        <button type="reset" class="btn btn-secondary"><i class="fas fa-undo me-2"></i>Reset</button>
+                    </div>
+                </form>
+                
+                <div id="result" class="alert alert-info mt-3" style="display: none;"></div>
+                <div class="chart-container">
+                    <canvas id="premiumChart"></canvas>
+                </div>
+                <div class="chart-container mt-3">
+                    <canvas id="savingsChart"></canvas>
+                </div>
+                <div id="finder" class="mt-4 card p-3" style="display: none;">
+                    <h5><i class="fas fa-search me-2"></i>Find Insurance Providers</h5>
+                    <p>Compare quotes from top providers:</p>
+                    <div class="loading-spinner" id="loadingSpinner"></div>
+                    <ul id="insurerList" class="list-unstyled"></ul>
+                    <p>Compare at: <a href="https://www.bankrate.com/insurance/car/" target="_blank">Bankrate</a> or <a href="https://www.nerdwallet.com/insurance/auto" target="_blank">NerdWallet</a>.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal for Saving Tips -->
+    <div class="modal fade" id="tipsModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-lightbulb me-2"></i>Your Savings Tips</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="tipsContent"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Got It!</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Tooltips
+        const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+        tooltipTriggerList.forEach(el => new bootstrap.Tooltip(el));
+
+        // Sliders
+        const ageSlider = document.getElementById('age');
+        const ageValue = document.getElementById('ageValue');
+        ageSlider.addEventListener('input', () => {
+            ageValue.textContent = ageSlider.value;
+            updateProgress();
+        });
+
+        const mileageSlider = document.getElementById('mileage');
+        const mileageValue = document.getElementById('mileageValue');
+        mileageSlider.addEventListener('input', () => {
+            mileageValue.textContent = mileageSlider.value.toLocaleString() + ' miles';
+            updateProgress();
+        });
+
+        // Progress Bar
+        function updateProgress() {
+            const inputs = ['state', 'age', 'gender', 'drivingRecord', 'mileage', 'vehicleType', 'creditScore', 'maritalStatus'];
+            let filled = 0;
+            inputs.forEach(id => {
+                const input = document.getElementById(id);
+                if (input.value) filled++;
+            });
+            const progress = (filled / inputs.length) * 100;
+            document.getElementById('formProgress').style.width = `${progress}%`;
+        }
+        document.querySelectorAll('input, select').forEach(el => el.addEventListener('change', updateProgress));
+
+        let premiumChart, savingsChart;
+
+        function calculatePremium() {
+            const form = document.getElementById('estimatorForm');
+            if (!form.checkValidity()) {
+                form.classList.add('was-validated');
+                return;
+            }
+            form.classList.remove('was-validated');
+
+            const base = parseFloat(document.getElementById('state').value) || 2679;
+            let adjustment = 1.0;
+
+            const age = parseInt(ageSlider.value);
+            if (age < 25) adjustment *= 1.8;
+            else if (age < 35) adjustment *= 1.2;
+            else if (age > 65) adjustment *= 1.3;
+
+            const mileage = parseInt(mileageSlider.value);
+            let mileageAdj = 1.0;
+            if (mileage < 10000) mileageAdj = 0.9;
+            else if (mileage > 15000) mileageAdj = 1.2;
+
+            adjustment *= mileageAdj;
+            adjustment *= parseFloat(document.getElementById('gender').value);
+            adjustment *= parseFloat(document.getElementById('drivingRecord').value);
+            adjustment *= parseFloat(document.getElementById('vehicleType').value);
+            adjustment *= parseFloat(document.getElementById('creditScore').value);
+            adjustment *= parseFloat(document.getElementById('maritalStatus').value);
+
+            const estimatedAnnual = Math.round(base * adjustment);
+            const estimatedMonthly = Math.round(estimatedAnnual / 12);
+
+            document.getElementById('result').innerHTML = `Estimated Annual Premium: <strong>$${estimatedAnnual}</strong> (Full Coverage)<br>Estimated Monthly: <strong>$${estimatedMonthly}</strong>`;
+            document.getElementById('result').style.display = 'block';
+
+            // Premium Pie Chart
+            const premiumCtx = document.getElementById('premiumChart').getContext('2d');
+            if (premiumChart) premiumChart.destroy();
+            premiumChart = new Chart(premiumCtx, {
+                type: 'pie',
+                data: {
+                    labels: ['Liability', 'Collision', 'Comprehensive', 'Other'],
+                    datasets: [{
+                        data: [estimatedAnnual*0.4, estimatedAnnual*0.3, estimatedAnnual*0.2, estimatedAnnual*0.1],
+                        backgroundColor: ['#00cc66', '#ffca28', '#0288d1', '#d81b60'],
+                        borderColor: '#ffffff',
+                        borderWidth: 2,
+                        hoverOffset: 20
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: '#1a1a1a', font: { size: 14, weight: '600' } } },
+                        title: { display: true, text: 'Your Premium Breakdown', color: '#1a1a1a', font: { size: 16, weight: '700' } },
+                        tooltip: { backgroundColor: '#00cc66', titleColor: '#ffffff', bodyColor: '#ffffff' }
+                    }
+                }
+            });
+
+            // Savings Bar Chart
+            const savingsCtx = document.getElementById('savingsChart').getContext('2d');
+            if (savingsChart) savingsChart.destroy();
+            savingsChart = new Chart(savingsCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Shop Around', 'Bundle Policies', 'Increase Deductible', 'Good Credit', 'Usage-Based', 'Discounts', 'Low-Cost Vehicle', 'Drop Coverage'],
+                    datasets: [{
+                        label: 'Potential Savings (%)',
+                        data: [30, 20, 25, 50, 40, 15, 20, 30],
+                        backgroundColor: '#00cc66',
+                        borderColor: '#ffffff',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: { beginAtZero: true, title: { display: true, text: 'Savings %', color: '#1a1a1a', font: { size: 14, weight: '600' } }, ticks: { color: '#1a1a1a' } },
+                        x: { ticks: { color: '#1a1a1a', font: { size: 12 } } }
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#1a1a1a', font: { size: 14, weight: '600' } } },
+                        title: { display: true, text: 'Ways to Save on Your Premium', color: '#1a1a1a', font: { size: 16, weight: '700' } },
+                        tooltip: { backgroundColor: '#00cc66', titleColor: '#ffffff', bodyColor: '#ffffff' }
+                    }
+                }
+            });
+
+            // Finder with Search Animation
+            const finder = document.getElementById('finder');
+            const insurerList = document.getElementById('insurerList');
+            const spinner = document.getElementById('loadingSpinner');
+            spinner.style.display = 'block';
+            insurerList.style.opacity = '0';
+            setTimeout(() => {
+                spinner.style.display = 'none';
+                const stateName = document.getElementById('state').options[document.getElementById('state').selectedIndex].text;
+                const insurers = ['GEICO', 'Progressive', 'State Farm', 'Allstate', 'USAA'];
+                insurerList.innerHTML = insurers.map(ins => `<li class="mb-2"><a href="https://www.${ins.toLowerCase().replace(' ', '')}.com/" target="_blank"><i class="fas fa-link me-2"></i>${ins} (${stateName})</a></li>`).join('');
+                insurerList.style.transition = 'opacity 0.5s';
+                insurerList.style.opacity = '1';
+                finder.style.display = 'block';
+            }, 1000);
+
+            // Personalized Tips
+            let tips = '<ul class="list-unstyled">';
+            if (age < 25) tips += '<li class="mb-2"><i class="fas fa-check-circle me-2 text-success"></i><strong>Defensive Driving Course</strong>: Save 5-15% with providers like GEICO.</li>';
+            if (mileage < 10000) tips += '<li class="mb-2"><i class="fas fa-check-circle me-2 text-success"></i><strong>Pay-Per-Mile Insurance</strong>: Try Metromile for 20-40% savings.</li>';
+            if (document.getElementById('creditScore').value === '1.5') tips += '<li class="mb-2"><i class="fas fa-check-circle me-2 text-success"></i><strong>Boost Credit</strong>: Use Credit Karma to improve your score and cut rates.</li>';
+            tips += '</ul>';
+            document.getElementById('tipsContent').innerHTML = tips || 'Enter your details to get personalized tips!';
+            new bootstrap.Modal(document.getElementById('tipsModal')).show();
+        }
+
+        function saveEstimate() {
+            const data = {
+                state: document.getElementById('state').value,
+                age: ageSlider.value,
+                gender: document.getElementById('gender').value,
+                drivingRecord: document.getElementById('drivingRecord').value,
+                mileage: mileageSlider.value,
+                vehicleType: document.getElementById('vehicleType').value,
+                creditScore: document.getElementById('creditScore').value,
+                maritalStatus: document.getElementById('maritalStatus').value
+            };
+            localStorage.setItem('estimateData', JSON.stringify(data));
+            alert('Estimate saved!');
+        }
+
+        function loadSaved() {
+            const saved = JSON.parse(localStorage.getItem('estimateData'));
+            if (saved) {
+                document.getElementById('state').value = saved.state;
+                ageSlider.value = saved.age;
+                ageValue.textContent = saved.age;
+                document.getElementById('gender').value = saved.gender;
+                document.getElementById('drivingRecord').value = saved.drivingRecord;
+                mileageSlider.value = saved.mileage;
+                mileageValue.textContent = parseInt(saved.mileage).toLocaleString() + ' miles';
+                document.getElementById('vehicleType').value = saved.vehicleType;
+                document.getElementById('creditScore').value = saved.creditScore;
+                document.getElementById('maritalStatus').value = saved.maritalStatus;
+                updateProgress();
+            } else {
+                alert('No saved estimate found.');
+            }
+        }
+    </script>
+</body>
+</html>
